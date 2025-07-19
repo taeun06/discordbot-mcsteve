@@ -1,0 +1,56 @@
+import { readdirSync } from 'fs';
+import { join } from 'path';
+import { 
+  Client, 
+  GuildMember,
+  APIInteractionGuildMember, 
+  ChatInputCommandInteraction, 
+  Collection,
+} from 'discord.js';
+
+export const commands : Collection<string, Command> = new Collection<string, Command>();
+
+export interface Command {
+  data: { name: string; toJSON(): unknown };
+  permissions?: bigint;
+  requiredRoles?: string[];
+  execute(interaction: ChatInputCommandInteraction): Promise<void>;
+}
+
+export async function loadCommands(commandsPath: string) {
+  for (const file of readdirSync(commandsPath).filter(f => f.endsWith('.js') || f.endsWith('.ts'))) {
+    const relPath = join(commandsPath, file);
+    const commandModule = await import(relPath);
+    const command : Command = commandModule.default || commandModule.cmd || commandModule;
+    commands.set(command.data.name, command);
+  }
+}
+
+export async function commandProcess(interaction: ChatInputCommandInteraction) {
+  const client : Client = interaction.client;
+  const command : Command = commands.get(interaction.commandName) as NonNullable<typeof command>;
+  if (!command) return;
+
+  if (command.permissions && !interaction.memberPermissions?.has(command.permissions)) {
+    return interaction.reply({ content: '이 명령을 실행할 권한이 없습니다.', ephemeral: true });
+  }
+
+  if (command.requiredRoles) { //TODO : 권한 처리 로직은 이후에 다른 함수로 빼기
+    let member : GuildMember | APIInteractionGuildMember = interaction.member as NonNullable<typeof member>;
+    if(!(member instanceof GuildMember)){
+      member = await interaction.guild!.members.fetch(interaction.user.id);
+    }
+    if (!command.requiredRoles.some(role => member.roles.cache.some(r => r.name === role))) {
+      return interaction.reply({ content: '이 명령을 실행할 수 있는 역할을 가지고 있지 않습니다.', ephemeral: true });
+    }
+  }
+
+  try {
+    await command.execute(interaction);
+  } catch (err) {
+    console.error(err);
+    if (!interaction.replied) {
+      await interaction.reply({ content: '오류가 발생했습니다.', ephemeral: true });
+    }
+  }
+}

@@ -6,18 +6,12 @@ import {
   MessageFlags,
   ChannelType,
   TextChannel,
+  Message,
 } from 'discord.js';
+import type { Command } from './commands';
+import * as mcs from 'node-mcstatus';
 
-import type { JavaStatusResponse } from 'node-mcstatus';
-const mcs = require('node-mcstatus') as {
-  statusJava: (
-    addr: string,
-    port?: number,
-    opts?: { query?: boolean; timeout?: number }
-  ) => Promise<JavaStatusResponse>;
-};
-
-export default {
+export const cmd : Command = {
   data: new SlashCommandBuilder()
     .setName('add_server')
     .setDescription('상태를 표시할 마인크래프트 서버를 등록합니다')
@@ -52,40 +46,20 @@ export default {
     const channel = interaction.options.getChannel('channel', true) as TextChannel;
     const serverKey = `${address}:${port}`;
 
-    const guildMap = client.serverIntervals.get(guildId)!;
+    const guildIntervals = client.serverIntervals.get(guildId)!;
 
-    if (guildMap.has(serverKey)) {
-      clearInterval(guildMap.get(serverKey)!);
+    if (guildIntervals.has(serverKey)) {
+      clearInterval(guildIntervals.get(serverKey)!);
     }
 
-    let lastMessage: import('discord.js').Message | null = null;
+    let lastMessage: Message | null = null;
     const intervalId = setInterval(async () => {
-      try {
-        const result = await mcs.statusJava(address, port, { query: true }) as NonNullable<typeof result>;
-
-        const online  = result?.players.online;
-        const max     = result?.players.max;
-        const players = result?.players.sample?.map(p => p.name) || [];
-
-        const embed = new EmbedBuilder()
-          .setTitle(`🎮 ${serverKey} 상태`)
-          .addFields(
-            { name: '접속자 수',     value: `${online}/${max}`, inline: true },
-            { name: '플레이어 목록', value: players.length ? players.join('\n') : '없음' }
-          )
-          .setTimestamp();
-
-        if (!lastMessage) {
-          lastMessage = await channel.send({ embeds: [embed] });
-        } else {
-          lastMessage = await lastMessage.edit({ embeds: [embed] });
-        }
-      } catch (error) {
-        console.error('mcstatus.io 에러:', error);
-      }
+      const msg = await serverStatus(address, port, channel, lastMessage);
+      if(msg) lastMessage = msg;
+      //TODO: 서버 연결 에러 났을 시 서버가 오프라인임도 알려주는 기능 추가
     }, 10000);
 
-    guildMap.set(serverKey, intervalId);
+    guildIntervals.set(serverKey, intervalId);
 
     await interaction.reply({
       content: `✅ 서버 등록 완료: \`${serverKey}\` → ${channel}`,
@@ -93,3 +67,33 @@ export default {
     });
   }
 };
+
+async function serverStatus(
+  address: string, port:number,
+  channel: TextChannel,
+  lastMessage: Message | null) : Promise<Message | undefined>{
+  try {
+    const result = await mcs.statusJava(address, port, { query: true }) as NonNullable<typeof result>;
+
+    const online  = result?.players.online;
+    const max     = result?.players.max;
+    const players = result?.players.sample?.map(p => p.name) || [];
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🎮 ${address}:${port} 상태`)
+      .addFields(
+        { name: '접속자 수',     value: `${online}/${max}`, inline: true },
+        { name: '플레이어 목록', value: players.length ? players.join('\n') : '없음' }
+      )
+      .setTimestamp();
+
+    if (!lastMessage) {
+      return await channel.send({ embeds: [embed] });
+    } else {
+      return await lastMessage.edit({ embeds: [embed] });
+    }
+  } catch (error) {
+    console.error('mcstatus.io 에러:', error);
+    return undefined;
+  }
+}

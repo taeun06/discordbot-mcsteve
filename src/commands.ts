@@ -1,4 +1,5 @@
 import { readdirSync } from 'fs';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { join } from 'path';
 import { 
   Client, 
@@ -18,14 +19,18 @@ export interface Command {
 }
 
 export async function loadCommands(commandsPath: string) {
-  for (const file of readdirSync(commandsPath).filter(f => f.endsWith('.js') || f.endsWith('.ts'))) {
-    const relPath = join(commandsPath, file);
-    const commandModule = await import(relPath);
-    const command : Command = commandModule.default || commandModule.cmd || commandModule;
+  const files = readdirSync(commandsPath)
+    .filter(f => f.endsWith('.js') || f.endsWith('.ts'));
+  for (const file of files) {
+    const moduleUrl = pathToFileURL(join(commandsPath, file)).href;
+    const commandModule = await import(moduleUrl);
+    const command: Command =
+      commandModule.default
+      ?? commandModule.cmd
+      ?? commandModule;
     commands.set(command.data.name, command);
   }
 }
-
 export async function commandProcess(interaction: ChatInputCommandInteraction) {
   const client : Client = interaction.client;
   const command : Command = commands.get(interaction.commandName) as NonNullable<typeof command>;

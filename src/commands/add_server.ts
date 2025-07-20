@@ -8,7 +8,7 @@ import {
   TextChannel,
   Message,
 } from 'discord.js';
-import type { Command } from './commands';
+import type { Command } from '../commands';
 import * as mcs from 'node-mcstatus';
 
 export const cmd : Command = {
@@ -57,7 +57,7 @@ export const cmd : Command = {
       const msg = await serverStatus(address, port, channel, lastMessage);
       if(msg) lastMessage = msg;
       //TODO: 서버 연결 에러 났을 시 서버가 오프라인임도 알려주는 기능 추가
-    }, 10000);
+    }, 180000);
 
     guildIntervals.set(serverKey, intervalId);
 
@@ -73,11 +73,13 @@ async function serverStatus(
   channel: TextChannel,
   lastMessage: Message | null) : Promise<Message | undefined>{
   try {
-    const result = await mcs.statusJava(address, port, { query: true }) as NonNullable<typeof result>;
+    const url = `https://api.mcstatus.io/v2/status/java/${address}:${port}?timeout=10.0`;
+    const result = await (await fetch(url)).json();
+    console.log(JSON.stringify(result, null, 2));
 
-    const online  = result?.players.online;
-    const max     = result?.players.max;
-    const players = result?.players.sample?.map(p => p.name) || [];
+    const online  = result.players.online;
+    const max     = result.players.max;
+    const players = result.players.list?.map(p => p.name_clean) || [];
 
     const embed = new EmbedBuilder()
       .setTitle(`🎮 ${address}:${port} 상태`)

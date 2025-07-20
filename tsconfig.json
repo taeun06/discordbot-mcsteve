@@ -19,5 +19,8 @@
         "src/commands",
         "src/types"
     ],
+    "ts-node": {
+        "esm": true
+    },
     "exclude": ["node_modules", "dist"]
 }

@@ -3,7 +3,12 @@ import {
   GatewayIntentBits, REST,
   Client, Routes,
 } from 'discord.js';
-import { commands, loadCommands, commandProcess } from './commands/commands';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { commands, loadCommands, commandProcess } from './commands.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = dirname(__filename);
 
 declare module 'discord.js' {
   interface Client {
@@ -14,7 +19,7 @@ declare module 'discord.js' {
 
 const client = new Client({ intents: [ GatewayIntentBits.Guilds ] });
 client.serverIntervals = new Map();
-await loadCommands('./commands');
+await loadCommands(join(__dirname, 'commands'));
 
 const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN!);
 const CLIENT_ID = process.env.CLIENT_ID!;

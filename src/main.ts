@@ -6,6 +6,9 @@ import {
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { commands, loadCommands, commandProcess } from './commands.js';
+import { logger } from './util/log.js';
+
+const VERSION = 'v0.1.0';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
@@ -25,7 +28,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN!);
 const CLIENT_ID = process.env.CLIENT_ID!;
 
 client.once('ready', async () => {
-  console.log(`MCBOT-STEVE v0.0.1 Ready - Logged in as ${client.user?.tag}`);
+  logger.info(`MCBOT-STEVE ${VERSION} Ready - Logged in as ${client.user?.tag}`);
   const commandData = commands.map(cmd => cmd.data.toJSON());
   for (const guild of client.guilds.cache.values()) {
     client.serverIntervals.set(guild.id, new Map());
@@ -34,15 +37,15 @@ client.once('ready', async () => {
         Routes.applicationGuildCommands(CLIENT_ID, guild.id),
         { body: commandData }
       );
-      console.log(`Registered commands for Server ${guild.name} (${guild.id})`);
+      logger.info(`Registered commands for Server ${guild.name} (${guild.id})`);
     } catch (err) {
-      console.error(`Error registering commands for Server ${guild.name} (${guild.id}):`, err);
+      logger.error(`Error registering commands for Server ${guild.name} (${guild.id}):`, err);
     }
   }
 });
 
 client.on('guildCreate', async guild => {
-  console.log(`Joined New Server: ${guild.name} (${guild.id})`);
+  logger.info(`Joined New Server: ${guild.name} (${guild.id})`);
   client.serverIntervals.set(guild.id, new Map());
   const commandData = commands.map(cmd => cmd.data.toJSON());
   try {
@@ -50,9 +53,9 @@ client.on('guildCreate', async guild => {
       Routes.applicationGuildCommands(CLIENT_ID, guild.id),
       { body: commandData }
     );
-    console.log(`Registered commands for Server ${guild.name} (${guild.id})`);
+    logger.info(`Registered commands for Server ${guild.name} (${guild.id})`);
   } catch (err) {
-    console.error(`Error occurred while registering to Server ${guild.name} (${guild.id}):`, err);
+    logger.error(`Error occurred while registering to Server ${guild.name} (${guild.id}):`, err);
   }
 });
 
@@ -61,7 +64,7 @@ client.on('guildDelete', guild => {
   if (guildMap) {
     for (const intervalId of guildMap.values()) clearInterval(intervalId);
     client.serverIntervals.delete(guild.id);
-    console.log(`Cleared all intervals for Server ${guild.name} (${guild.id})`);
+    logger.info(`Cleared all intervals for Server ${guild.name} (${guild.id})`);
   }
 });
 

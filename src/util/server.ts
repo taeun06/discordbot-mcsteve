@@ -1,4 +1,5 @@
 import dgram from 'dgram';
+import { logger } from './log.js';
 
 interface QueryResult {
   online: boolean,
@@ -90,37 +91,45 @@ export async function queryServer(
       // receive full query response
       socket.once('message', resp => {
         // skip first 9 bytes: type(1), sessionId(4), padding(4)
-        const data = resp.slice(9);
-        const parts = data.toString('ascii').split('\x00').filter(p => p !== '');
+        const payload = resp.subarray(16);
 
-        // parse key/value pairs until 'player_' marker
+        // 5) 0x01 바이트 기준으로 서버 정보 파트와 플레이어 리스트 파트로 분리
+        const sepIndex = payload.indexOf(0x01);
+        if (sepIndex < 0) throw new Error('Malformed full stat response');
+        const serverBuf = payload.subarray(0, sepIndex);
+        const playerBuf = payload.subarray(sepIndex + 1);
+
+        // 6) 서버 정보 파싱 (0x00 구분자로 split)
+        const parts = serverBuf.toString('ascii').split('\0');
         const info: Record<string, string> = {};
-        const players: string[] = [];
-        let i = 0;
-        for (; i < parts.length; i += 2) {
+        for (let i = 0; i + 1 < parts.length; i += 2) {
           const key = parts[i];
-          if (key === 'player_') { i++; break; }
-          info[key] = parts[i + 1] || '';
+          const val = parts[i + 1];
+          if (key) info[key] = val;
         }
-        // remaining entries are player names
-        for (; i < parts.length; i++) {
-          if (parts[i]) players.push(parts[i]);
-        }
+
+        // 7) 플레이어 리스트 파싱
+        //    앞의 "player_" + 0x00 0x00 (총 9바이트) 건너뛰고,
+        //    남은 데이터를 0x00으로 split
+        const playersSection = playerBuf.subarray(9).toString('ascii').split('\0');
+        const players = playersSection.filter((n) => n.length > 0);
 
         const result: QueryResult = {
           online:     true,
-          MOTD:       info['hostname']   || '',
-          gameType:   info['gametype']   || '',
-          gameID:     info['game_id']    || '',
-          version:    info['version']    || '',
-          plugins:    info['plugins']    || '',
-          map:        info['map']        || '',
+          MOTD: info['hostname'] || '',
+          gameType: info['gametype'] || '',
+          gameID:   info['game_id']  || '',
+          version:  info['version']  || '',
+          plugins:  info['plugins']  || '',
+          map:      info['map']      || '',
           numPlayers: parseInt(info['numplayers'] || '0', 10),
           maxPlayers: parseInt(info['maxplayers'] || '0', 10),
           hostPort:   parseInt(info['hostport']   || '0', 10),
-          hostIP:     info['hostip']     || '',
-          players:    players
+          hostIP:     info['hostip'] || '',
+          players,
         };
+
+        logger.debug(result);
         cleanupAndResolve(result);
       });
     });

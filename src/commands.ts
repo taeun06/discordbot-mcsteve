@@ -8,7 +8,7 @@ import {
   ChatInputCommandInteraction, 
   Collection,
 } from 'discord.js';
-import { logger } from './util/log';
+import { logger } from './util/log.js';
 
 export const commands : Collection<string, Command> = new Collection<string, Command>();
 
